@@ -25,3 +25,8 @@ spec:
               value: "1"
             - name: RUST_LOG
               value: debug
+            - name: FEEDBACK_CHAT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: simple-words-bot-config
+                  key: feedback_chat_id

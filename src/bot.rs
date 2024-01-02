@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -15,7 +15,6 @@ use teloxide::types::{
 };
 use teloxide::Bot;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 use crate::model::Task;
 use crate::utils::rus_numeric;
@@ -24,11 +23,17 @@ use crate::utils::rus_numeric;
 struct BotContext {
     tasks: Vec<Task>,
     user_data: Mutex<HashMap<ChatId, UserData>>,
+    feedback_chat_id: Option<ChatId>,
 }
 
 #[derive(Debug)]
 struct UserData {
     current_tasks: Vec<u64>,
+}
+pub struct BotConfig {
+    pub tasks: Vec<Task>,
+    pub token: String,
+    pub feedback_chat_id: Option<ChatId>,
 }
 
 #[derive(Error, Debug)]
@@ -45,15 +50,21 @@ enum BotErrors {
     BadCallbackDataInButton,
     #[error("No reply markup")]
     NoReplyMarkup,
+    #[error("No feedback chat id")]
+    NoFeedbackChatId,
 }
 
 type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
-pub async fn setup_and_run_bot(tasks: Vec<Task>, token: &str) -> Result<()> {
-    let bot = Bot::new(token);
+pub async fn setup_and_run_bot(config: BotConfig) -> Result<()> {
+    let bot = Bot::new(config.token);
 
     let user_data = Mutex::new(HashMap::new());
-    let context = BotContext { tasks, user_data };
+    let context = BotContext {
+        tasks: config.tasks,
+        user_data,
+        feedback_chat_id: config.feedback_chat_id,
+    };
 
     Dispatcher::builder(
         bot,
@@ -83,9 +94,19 @@ async fn handle_message(bot: Bot, message: Message, context: Arc<BotContext>) ->
             .text()
             .ok_or(anyhow::anyhow!("Not a text message"))?;
 
-        match text.trim() {
-            "/start" => {
+        let (command, text) = if let Some(command) = text.trim().strip_prefix('/') {
+            let mut parts = command.splitn(2, ' ');
+            (parts.next().unwrap_or_default(), parts.next())
+        } else {
+            ("", Some(text))
+        };
+
+        match command {
+            "start" => {
                 ask_next_task(&bot, context.clone(), chat_id).await?;
+            }
+            "feedback" => {
+                send_feedback(&bot, text, &message, context.clone()).await?;
             }
             _ => {
                 bot.send_message(chat_id, HELP_TEXT).send().await?;
@@ -96,6 +117,48 @@ async fn handle_message(bot: Bot, message: Message, context: Arc<BotContext>) ->
     .await
 }
 
+async fn send_feedback(
+    bot: &Bot,
+    text: Option<&str>,
+    message: &Message,
+    context: Arc<BotContext>,
+) -> Result<()> {
+    let feedback_chat_id = context
+        .feedback_chat_id
+        .ok_or(BotErrors::NoFeedbackChatId)?;
+
+    let text = match text {
+        Some(text) => text,
+        None => {
+            bot.send_message(message.chat.id, "Пожалуйста, напишите текст, что хотите отправить. В дополнение можно ответить на сообщение бота, чтобы сослаться на него.").send().await?;
+            return Ok(());
+        }
+    };
+
+    let username = message
+        .from()
+        .as_ref()
+        .map(|user| {
+            format!(
+                "@{} ({})",
+                user.username.as_deref().unwrap_or("unknown"),
+                user.full_name()
+            )
+        })
+        .unwrap_or_default();
+
+    let reply = message
+        .reply_to_message()
+        .map(|r| r.text().unwrap_or_default())
+        .map(|r| format!("\n\nReply to:\n\n{}", r))
+        .unwrap_or_default();
+
+    let message = format!("Feedback from {username}:\n\n{text}{reply}");
+    bot.send_message(feedback_chat_id, message).send().await?;
+
+    Ok(())
+}
+
 async fn ask_next_task(bot: &Bot, context: Arc<BotContext>, chat_id: ChatId) -> Result<()> {
     // context
     //     .tasks
@@ -103,7 +166,8 @@ async fn ask_next_task(bot: &Bot, context: Arc<BotContext>, chat_id: ChatId) -> 
     //     .ok_or(BotErrors::NoTaskFound)?;
     let notify;
     let task = {
-        let mut user_data = context.user_data.lock().await;
+        // in case lock is poisoned it won't recover - best to kill the bot and restart TODO: check if that'll work actually
+        let mut user_data = context.user_data.lock().expect("Can't take user data");
         let user_data = user_data.entry(chat_id).or_insert_with(|| UserData {
             current_tasks: vec![],
         });

@@ -1,2 +1,3 @@
-# simple-words-bot
-A telegram bot to learn different aspects of language. Serbian to start with.
+# Simple words telegram bot
+
+Visit https://t.me/learn_serbian_bot to see it in action.

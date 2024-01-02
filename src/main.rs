@@ -1,6 +1,7 @@
 use std::env;
 
 use anyhow::{Context, Result};
+use teloxide::types::ChatId;
 
 mod bot;
 mod model;
@@ -22,9 +23,19 @@ async fn main() -> Result<()> {
         .collect::<Vec<_>>();
 
     let token = env::var("TELEGRAM_BOT_TOKEN").context("No TELEGRAM_BOT_TOKEN environment")?;
+    let feedback_chat_id = env::var("FEEDBACK_CHAT_ID")
+        .context("No FEEDBACK_CHAT_ID environment")?
+        .parse::<i64>()
+        .map(ChatId)
+        .ok();
 
     log::info!("Got {} tasks, starting bot.", tasks.len());
-    bot::setup_and_run_bot(tasks, &token).await?;
+    bot::setup_and_run_bot(bot::BotConfig {
+        tasks,
+        token,
+        feedback_chat_id,
+    })
+    .await?;
 
     Ok(())
 }
