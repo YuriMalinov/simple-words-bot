@@ -1,0 +1,113 @@
+theme: travel
+category: cases
+tasks:
+- id: 13335499603670830146
+  sentence: Čitamo zanimljivu knjigu o drevnim gradovima.
+  sentence_en: We read an interesting book about ancient cities.
+  sentence_ru: Мы читаем интересную книгу о древних городах.
+  masked_sentence: Čitamo zanimljivu knjigu o ***** *****. *\(plural\)*
+  correct: drevnim gradovima
+  base: drevni gradovi
+  base_ru: древние города
+  hints:
+  - name: Пол
+    value: male
+  - name: Число
+    value: plural
+  - name: Падеж
+    value: 'locative. Использование: используется с предлогом ''о'' для выражения
+      тем'
+  wrong_answers:
+  - drevne gradove
+  - drevnih gradova
+  - drevni gradovi
+  - drevnima gradovima
+  - drevno gradovi
+- id: 13026069662146584378
+  sentence: Devojčica mašta o avanturama u starom zamku.
+  sentence_en: The girl dreams of adventures in an old castle.
+  sentence_ru: Девочка мечтает об авантюрах в старом замке.
+  masked_sentence: Devojčica mašta o avanturama u ***** *****.
+  correct: starom zamku
+  base: stari zamak
+  base_ru: старый замок
+  hints:
+  - name: Пол
+    value: male
+  - name: Число
+    value: singular
+  - name: Падеж
+    value: 'locative. Использование: указывает на нахождение внутри чего-либо, используется
+      с предлогом ''у'' для вещей, внутри которых можно физически находиться'
+  wrong_answers:
+  - stari zamak
+  - starom zamaka
+  - starog zamka
+  - starim zamkom
+  - starom zamku
+- id: 3047612171007608437
+  sentence: Uživamo u pričama o hrabrim vitezovima u tamnim šumama.
+  sentence_en: We enjoy the stories about brave knights in dark forests.
+  sentence_ru: Мы наслаждаемся рассказами о храбрых рыцарях в темных лесах.
+  masked_sentence: Uživamo u ***** o hrabrim vitezovima u tamnim šumama. *\(plural\)*
+  correct: pričama
+  base: priče
+  base_ru: рассказы
+  hints:
+  - name: Пол
+    value: female
+  - name: Число
+    value: plural
+  - name: Падеж
+    value: 'locative. Использование: описывает участие в деятельности, с предлогом
+      ''у'''
+  wrong_answers:
+  - priči
+  - priče
+  - priču
+  - pričom
+  - pričama
+- id: 5893626291079883793
+  sentence: Putovali smo po čarobnim ostrvima i uživali u prirodi.
+  sentence_en: We traveled across magical islands and enjoyed nature.
+  sentence_ru: Мы путешествовали по волшебным островам и наслаждались природой.
+  masked_sentence: Putovali smo po ***** ***** i uživali u prirodi. *\(plural\)*
+  correct: čarobnim ostrvima
+  base: čarobna ostrva
+  base_ru: волшебные острова
+  hints:
+  - name: Пол
+    value: neutral
+  - name: Число
+    value: plural
+  - name: Падеж
+    value: 'locative. Использование: используется с предлогом ''по'' для выражения
+      движения, направленного к различным местам'
+  wrong_answers:
+  - čarobni ostrvu
+  - čarobne ostrve
+  - čarobno ostrvo
+  - čarobnih ostrva
+  - čarobnom ostrvom
+- id: 3054763402570950308
+  sentence: Sanjali smo o letovanju u mirnim gradovima Italije.
+  sentence_en: We dreamt about vacationing in the peaceful cities of Italy.
+  sentence_ru: Мы мечтали об отпуске в мирных городах Италии.
+  masked_sentence: Sanjali smo o ***** u mirnim gradovima Italije.
+  correct: letovanju
+  base: letovanje
+  base_ru: летний отдых
+  hints:
+  - name: Пол
+    value: neutral
+  - name: Число
+    value: singular
+  - name: Падеж
+    value: 'locative. Использование: указывает на предмет речи, мысли или эмоции,
+      с предлогом ''о'''
+  wrong_answers:
+  - letovanji
+  - letovanje
+  - letovanjem
+  - letovanja
+  - letovao

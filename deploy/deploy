@@ -1,0 +1,16 @@
+#!/bin/bash
+set -x
+cd "$(dirname "$0")/.." || exit
+
+export BUILD_TAG=$(date --utc +%Y%m%d_%H%M%SZ)
+
+deploy/build || exit
+deploy/push || exit
+
+if [ -z "$BUILD_TAG" ]; then
+  echo "BUILD_TAG is not set, skipping push with tag"
+  exit -1
+fi
+
+cat deploy/deployment.yaml | sed s/\:latest/:$BUILD_TAG/ | kubectl apply -f - --wait
+#&& kubectl rollout restart deployment/words-bot

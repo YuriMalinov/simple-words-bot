@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-words-bot
+spec:
+  replicas: 1  # Bot is working using pull for now
+  selector:
+    matchLabels:
+      app: simple-words-bot
+  template:
+    metadata:
+      labels:
+        app: simple-words-bot
+    spec:
+      containers:
+        - name: simple-words-bot
+          image: cr.yandex/crpjfqo85tkck6b14h4m/simple-words-bot:latest
+          env:
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: simple-words-bot-token
+                  key: token
+            - name: RUST_BACKTRACE
+              value: "1"
+            - name: RUST_LOG
+              value: debug

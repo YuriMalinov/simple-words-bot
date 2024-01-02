@@ -1,0 +1,5 @@
+#!/bin/bash
+cd "$(dirname "$0")/.." || exit
+export BUILD_TAG=${BUILD_TAG:=$(date --utc +%Y%m%d_%H%M%SZ)}
+echo "Building with tag: cr.yandex/crpjfqo85tkck6b14h4m/words-bot:$BUILD_TAG"
+docker build . -t cr.yandex/crpjfqo85tkck6b14h4m/simple-words-bot:latest -t cr.yandex/crpjfqo85tkck6b14h4m/simple-words-bot:$BUILD_TAG

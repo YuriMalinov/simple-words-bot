@@ -1,0 +1,8 @@
+#!/bin/bash
+cd "$(dirname "$0")/.." || exit
+docker push cr.yandex/crpjfqo85tkck6b14h4m/simple-words-bot:latest
+if [ -z "$BUILD_TAG" ]; then
+  echo "BUILD_TAG is not set, skipping push with tag"
+else
+  docker push cr.yandex/crpjfqo85tkck6b14h4m/simple-words-bot:$BUILD_TAG
+fi
