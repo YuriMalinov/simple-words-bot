@@ -9,6 +9,18 @@ pub fn rus_numeric<'a>(n: usize, zero: &'a str, one: &'a str, two: &'a str) -> &
     }
 }
 
+pub fn escape_telegram_symbols(str: &str, symbols: &str) -> String {
+    let mut result = String::new();
+    let chars = symbols.chars().collect::<Vec<_>>();
+    for c in str.chars() {
+        if chars.contains(&c) {
+            result.push('\\');
+        }
+        result.push(c);
+    }
+    result
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

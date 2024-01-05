@@ -16,20 +16,26 @@ use teloxide::types::{
 use teloxide::Bot;
 use thiserror::Error;
 
+use crate::bot::filter_handlers::select_tasks;
 use crate::model::Task;
 use crate::utils::rus_numeric;
 
+use super::filter_handlers;
+
 #[derive(Debug)]
-struct BotContext {
-    tasks: Vec<Task>,
-    user_data: Mutex<HashMap<ChatId, UserData>>,
-    feedback_chat_id: Option<ChatId>,
+pub(super) struct BotContext {
+    pub(super) tasks: Vec<Task>,
+    pub(super) user_data: Mutex<HashMap<ChatId, UserData>>,
+    pub(super) feedback_chat_id: Option<ChatId>,
+}
+
+#[derive(Debug, Default)]
+pub struct UserData {
+    pub(super) current_tasks: Vec<u64>,
+    pub(super) filter: Option<String>,
 }
 
 #[derive(Debug)]
-struct UserData {
-    current_tasks: Vec<u64>,
-}
 pub struct BotConfig {
     pub tasks: Vec<Task>,
     pub token: String,
@@ -103,10 +109,16 @@ async fn handle_message(bot: Bot, message: Message, context: Arc<BotContext>) ->
 
         match command {
             "start" => {
-                ask_next_task(&bot, context.clone(), chat_id).await?;
+                ask_next_task(&bot, &context.clone(), chat_id).await?;
             }
             "feedback" => {
                 send_feedback(&bot, text, &message, context.clone()).await?;
+            }
+            "filter" => {
+                filter_handlers::handle_filter(&bot, text, chat_id, &context).await?;
+            }
+            "filter-reset" => {
+                filter_handlers::handle_filter(&bot, Some("-"), chat_id, &context).await?;
             }
             _ => {
                 bot.send_message(chat_id, HELP_TEXT).send().await?;
@@ -159,26 +171,25 @@ async fn send_feedback(
     Ok(())
 }
 
-async fn ask_next_task(bot: &Bot, context: Arc<BotContext>, chat_id: ChatId) -> Result<()> {
+pub(super) async fn ask_next_task(bot: &Bot, context: &BotContext, chat_id: ChatId) -> Result<()> {
     // context
     //     .tasks
     //     .choose(&mut thread_rng())
     //     .ok_or(BotErrors::NoTaskFound)?;
     let notify;
+    let current_filter;
     let task = {
         // in case lock is poisoned it won't recover - best to kill the bot and restart TODO: check if that'll work actually
         let mut user_data = context.user_data.lock().expect("Can't take user data");
-        let user_data = user_data.entry(chat_id).or_insert_with(|| UserData {
-            current_tasks: vec![],
-        });
+        let user_data = user_data.entry(chat_id).or_default();
 
         notify = if user_data.current_tasks.is_empty() {
-            user_data.current_tasks = context.tasks.iter().map(|task| task.id).collect::<Vec<_>>();
-            user_data.current_tasks.shuffle(&mut thread_rng());
+            user_data.current_tasks = select_tasks(user_data, &context.tasks)?;
             Some(user_data.current_tasks.len())
         } else {
             None
         };
+        current_filter = user_data.filter.clone();
 
         let task_id = user_data
             .current_tasks
@@ -196,8 +207,13 @@ async fn ask_next_task(bot: &Bot, context: Arc<BotContext>, chat_id: ChatId) -> 
         bot.send_message(
             chat_id,
             format!(
-                "У меня есть {generated_tasks} {tasks}, поехали!",
-                tasks = rus_numeric(generated_tasks, "задач", "задача", "задачи")
+                "У меня есть {generated_tasks} {tasks}{filter}, поехали!",
+                tasks = rus_numeric(generated_tasks, "задач", "задача", "задачи"),
+                filter = match current_filter {
+                    Some(filter) =>
+                        format!(" по фильтру `{filter}` (используйте /filter, чтобы поменять)"),
+                    None => "".to_owned(),
+                }
             ),
         )
         .send()
@@ -396,7 +412,7 @@ async fn handle_callback_query(
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        ask_next_task(&bot, context, chat_id).await?;
+        ask_next_task(&bot, &context, chat_id).await?;
 
         Ok(())
     })

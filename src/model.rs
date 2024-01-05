@@ -12,11 +12,18 @@ pub struct Task {
     pub sentence_ru: String,
     pub sentence_en: String,
     pub hints: Vec<Hint>,
+    pub filters: Vec<FilterValue>,
     pub wrong_answers: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Hint {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FilterValue {
     pub name: String,
     pub value: String,
 }
@@ -44,8 +51,11 @@ pub fn scan_data_directory(directory_path: &str) -> anyhow::Result<Vec<TaskGroup
             if let Some(extension) = file_path.extension() {
                 if extension == "yaml" || extension == "yml" {
                     if let Some(file_path_str) = file_path.to_str() {
-                        if let Ok(task_group) = read_model_from_file(file_path_str) {
-                            task_groups.push(task_group);
+                        match read_model_from_file(file_path_str) {
+                            Ok(task_group) => task_groups.push(task_group),
+                            Err(err) => {
+                                log::error!("Error reading file {:?}: {}", file_path, err);
+                            }
                         }
                     }
                 }
