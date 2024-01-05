@@ -260,14 +260,14 @@ const QUESTION_PRELUDE: &str = "➖❔➖❔➖❔➖❔➖❔➖\n\n\n";
 
 fn build_message(task: &Task) -> Result<MessageData> {
     let mut message = QUESTION_PRELUDE.to_owned();
-    message.push_str(&replace_mask_with_base_word(
-        &task.masked_sentence,
-        &task.base,
-    ));
+    message.push_str(&replace_mask_with_base_word(&task.masked_task, &task.base));
+    message.push('\n');
 
-    message.push_str("\n\n_");
-    message.push_str(&task.sentence_ru);
-    message.push_str("_\n");
+    for info in &task.info {
+        message.push_str("\n\n_");
+        message.push_str(info);
+        message.push_str("_\n");
+    }
 
     for hint in &task.hints {
         message.push('\n');

@@ -5,12 +5,11 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 pub struct Task {
     pub id: u64,
-    pub sentence: String,
-    pub masked_sentence: String,
+    pub task: String,
+    pub masked_task: String,
     pub correct: String,
     pub base: String,
-    pub sentence_ru: String,
-    pub sentence_en: String,
+    pub info: Vec<String>,
     pub hints: Vec<Hint>,
     pub filters: Vec<FilterValue>,
     pub wrong_answers: Vec<String>,
