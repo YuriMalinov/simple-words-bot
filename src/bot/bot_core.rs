@@ -4,23 +4,24 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use indoc::indoc;
-use rand::seq::{IteratorRandom, SliceRandom};
-use rand::thread_rng;
+use prost::Message;
 use teloxide::dptree::deps;
 use teloxide::prelude::*;
 use teloxide::types::{
-    InlineKeyboardButton, InlineKeyboardButtonKind, InlineKeyboardMarkup, MessageEntity,
-    MessageEntityKind, ParseMode, ReplyMarkup,
+    InlineKeyboardButtonKind, InlineKeyboardMarkup, MessageEntity, MessageEntityKind,
 };
 use teloxide::Bot;
 use thiserror::Error;
 
-use crate::bot::filter_handlers::select_tasks;
+use crate::bot::ask_next_task_handler::QUESTION_PRELUDE;
 use crate::model::Task;
-use crate::utils::rus_numeric;
 
-use super::filter_handlers;
+use super::ask_next_task_handler::ask_next_task;
+use super::proto::command::Command;
+use super::{filter_handlers, proto};
 
 #[derive(Debug)]
 pub(super) struct BotContext {
@@ -43,7 +44,7 @@ pub struct BotConfig {
 }
 
 #[derive(Error, Debug)]
-enum BotErrors {
+pub enum BotErrors {
     #[error("No task found")]
     NoTaskFound,
     #[error("No message found")]
@@ -93,7 +94,11 @@ static HELP_TEXT: &str = indoc! {"
     You can start by typing /start command. Return to this message with /help or any other text.
     "};
 
-async fn handle_message(bot: Bot, message: Message, context: Arc<BotContext>) -> HandlerResult {
+async fn handle_message(
+    bot: Bot,
+    message: teloxide::types::Message,
+    context: Arc<BotContext>,
+) -> HandlerResult {
     let chat_id = message.chat.id;
     handle(&bot.clone(), chat_id, || async move {
         let text = message
@@ -132,7 +137,7 @@ async fn handle_message(bot: Bot, message: Message, context: Arc<BotContext>) ->
 async fn send_feedback(
     bot: &Bot,
     text: Option<&str>,
-    message: &Message,
+    message: &teloxide::types::Message,
     context: Arc<BotContext>,
 ) -> Result<()> {
     let feedback_chat_id = context
@@ -171,163 +176,6 @@ async fn send_feedback(
     Ok(())
 }
 
-pub(super) async fn ask_next_task(bot: &Bot, context: &BotContext, chat_id: ChatId) -> Result<()> {
-    // context
-    //     .tasks
-    //     .choose(&mut thread_rng())
-    //     .ok_or(BotErrors::NoTaskFound)?;
-    let notify;
-    let current_filter;
-    let task = {
-        // in case lock is poisoned it won't recover - best to kill the bot and restart TODO: check if that'll work actually
-        let mut user_data = context.user_data.lock().expect("Can't take user data");
-        let user_data = user_data.entry(chat_id).or_default();
-
-        notify = if user_data.current_tasks.is_empty() {
-            user_data.current_tasks = select_tasks(user_data, &context.tasks)?;
-            Some(user_data.current_tasks.len())
-        } else {
-            None
-        };
-        current_filter = user_data.filter.clone();
-
-        let task_id = user_data
-            .current_tasks
-            .pop()
-            .ok_or(BotErrors::NoTaskFound)?;
-
-        context
-            .tasks
-            .iter()
-            .find(|task| task.id == task_id)
-            .ok_or(BotErrors::NoTaskFound)?
-    };
-
-    if let Some(generated_tasks) = notify {
-        bot.send_message(
-            chat_id,
-            format!(
-                "У меня есть {generated_tasks} {tasks}{filter}, поехали!",
-                tasks = rus_numeric(generated_tasks, "задач", "задача", "задачи"),
-                filter = match current_filter {
-                    Some(filter) =>
-                        format!(" по фильтру `{filter}` (используйте /filter, чтобы поменять)"),
-                    None => "".to_owned(),
-                }
-            ),
-        )
-        .send()
-        .await?;
-    }
-
-    let MessageData { message, buttons } = build_message(task)?;
-    log::debug!(
-        "#{chat_id} asking: {}",
-        message[QUESTION_PRELUDE.len()..]
-            .trim()
-            .lines()
-            .next()
-            .unwrap_or_default()
-    );
-
-    bot.send_message(chat_id, message)
-        .parse_mode(ParseMode::MarkdownV2)
-        .reply_markup(ReplyMarkup::inline_kb(
-            buttons
-                .into_iter()
-                .map(|button| vec![InlineKeyboardButton::callback(button.text, button.command)])
-                .collect::<Vec<_>>(),
-        ))
-        .send()
-        .await?;
-
-    Ok(())
-}
-
-#[derive(Debug, PartialEq)]
-struct SimpleCommand {
-    text: String,
-    command: String,
-}
-
-#[derive(Debug, PartialEq)]
-struct MessageData {
-    message: String,
-    buttons: Vec<SimpleCommand>,
-}
-
-const QUESTION_PRELUDE: &str = "➖❔➖❔➖❔➖❔➖❔➖\n\n\n";
-
-fn build_message(task: &Task) -> Result<MessageData> {
-    let mut message = QUESTION_PRELUDE.to_owned();
-    message.push_str(&replace_mask_with_base_word(&task.masked_task, &task.base));
-    message.push('\n');
-
-    for info in &task.info {
-        message.push_str("\n\n_");
-        message.push_str(info);
-        message.push_str("_\n");
-    }
-
-    for hint in &task.hints {
-        message.push('\n');
-        message.push_str(&hint.name);
-        message.push_str(": ||");
-        message.push_str(&hint.value);
-        message.push_str("||");
-    }
-
-    message = message.replace('.', "\\.").replace('-', "\\-");
-
-    let mut variants = vec![(&task.correct, true)];
-    variants.extend(
-        task.wrong_answers
-            .iter()
-            .filter(|v| **v != task.correct)
-            .choose_multiple(&mut thread_rng(), 3)
-            .into_iter()
-            .map(|answer| (answer, false)),
-    );
-    variants.shuffle(&mut thread_rng());
-
-    let buttons = variants
-        .iter()
-        .enumerate()
-        .map(|(i, (variant, correct))| SimpleCommand {
-            text: (*variant).clone(),
-            command: format!("{i}:{correct}"),
-        })
-        .collect::<Vec<_>>();
-
-    Ok(MessageData { message, buttons })
-}
-
-fn replace_mask_with_base_word(sentence: &str, base: &str) -> String {
-    let mut result = String::new();
-    let words: Vec<&str> = base.split(' ').filter(|w| !w.is_empty()).collect();
-    let parts: Vec<&str> = sentence.split("*****").collect();
-
-    for (i, part) in parts.iter().enumerate() {
-        result.push_str(part);
-        if i == parts.len() - 1 {
-            break;
-        }
-
-        result.push_str("`[");
-        if i >= words.len() {
-            result.push_str("?????");
-            log::warn!("Not enough words in base: {base} for sentence {sentence}");
-        } else if i + 2 < parts.len() {
-            result.push_str(words[i]);
-        } else {
-            result.push_str(&words[i..words.len()].join(" "));
-        }
-        result.push_str("]`");
-    }
-
-    result
-}
-
 async fn handle_callback_query(
     bot: Bot,
     query: CallbackQuery,
@@ -339,99 +187,107 @@ async fn handle_callback_query(
         bot.answer_callback_query(query.id).send().await?;
 
         let data = query.data.ok_or(BotErrors::NoData)?;
-        let parts = data.split(':').collect::<Vec<_>>();
-        if parts.len() != 2 {
-            return Err(BotErrors::WrongQuery.into());
-        }
+        let command = parse_command(data.as_str())?;
+        let command = command.command.ok_or(BotErrors::WrongQuery)?;
 
-        let (answer_index, correct) = parse_command(data.as_str())?;
-        log::debug!("#{chat_id} got answer correct={correct}");
-
-        let buttons = &message
-            .reply_markup()
-            .ok_or(BotErrors::NoReplyMarkup)
-            .context("reply_markup")?
-            .inline_keyboard;
-
-        let mut correct_text = &buttons[0][0].text;
-        let mut answer_text = &buttons[0][0].text;
-        for button in buttons {
-            let (button_index, correct) =
-                if let InlineKeyboardButtonKind::CallbackData(command) = &button[0].kind {
-                    parse_command(command)?
-                } else {
-                    return Err(BotErrors::BadCallbackDataInButton.into());
-                };
-
-            if button_index == answer_index {
-                answer_text = &button[0].text;
-            }
-            if correct {
-                correct_text = &button[0].text;
+        // For now the only command is answer
+        match &command {
+            Command::QuestionAnswer(answer) => {
+                handle_answer(&bot, chat_id, answer, message, &context).await
             }
         }
-
-        let text = message.text().ok_or(BotErrors::NoMessageFound)?;
-        let (mut text, entities_offset) = if let Some(prefix) = text.strip_prefix(QUESTION_PRELUDE)
-        {
-            (prefix.to_owned(), QUESTION_PRELUDE.chars().count())
-        } else {
-            (text.to_owned(), 0)
-        };
-
-        text.push_str("\n\n");
-        if !correct {
-            text.push_str("\n❌ ");
-            text.push_str(answer_text);
-        }
-        text.push_str("\n✅ ");
-        text.push_str(correct_text);
-
-        bot.edit_message_reply_markup(chat_id, message.id)
-            .reply_markup(InlineKeyboardMarkup::default())
-            .send()
-            .await?;
-
-        let fixed_entities = message.entities().map(|entities| {
-            entities
-                .iter()
-                .filter(|entity| !matches!(entity.kind, MessageEntityKind::Spoiler))
-                .map(|entity| MessageEntity {
-                    kind: entity.kind.clone(),
-                    offset: entity.offset - entities_offset,
-                    length: entity.length,
-                })
-                .collect::<Vec<_>>()
-        });
-
-        let mut call = bot.edit_message_text(chat_id, message.id, text);
-        if let Some(entities) = fixed_entities {
-            call = call.entities(entities)
-        }
-        call.send().await?;
-
-        tokio::time::sleep(Duration::from_secs(1)).await;
-
-        ask_next_task(&bot, &context, chat_id).await?;
-
-        Ok(())
     })
     .await
 }
 
-fn parse_command(command: &str) -> Result<(usize, bool)> {
-    let parts = command.split(':').collect::<Vec<_>>();
-    if parts.len() != 2 {
-        return Err(BotErrors::WrongQuery.into());
-    }
-    let index = parts[0]
-        .parse::<usize>()
-        .map_err(|_| BotErrors::WrongQuery)?;
-    let correct = parts[1]
-        .parse::<bool>()
-        .map_err(|_| BotErrors::WrongQuery)?;
+async fn handle_answer(
+    bot: &Bot,
+    chat_id: ChatId,
+    answer: &proto::QuestionAnswer,
+    message: &teloxide::types::Message,
+    context: &BotContext,
+) -> HandlerResult {
+    log::debug!(
+        "#{chat_id} got answer correct={correct}",
+        correct = answer.is_correct
+    );
 
-    Ok((index, correct))
+    let buttons = &message
+        .reply_markup()
+        .ok_or(BotErrors::NoReplyMarkup)
+        .context("reply_markup")?
+        .inline_keyboard;
+
+    let mut correct_text = &buttons[0][0].text;
+    let mut answer_text = &buttons[0][0].text;
+    for button in buttons {
+        let button_command =
+            if let InlineKeyboardButtonKind::CallbackData(command) = &button[0].kind {
+                parse_command(command)?
+            } else {
+                return Err(BotErrors::BadCallbackDataInButton.into());
+            };
+        let button_command = button_command.command.ok_or(BotErrors::WrongQuery)?;
+
+        let Command::QuestionAnswer(button_answer) = button_command;
+
+        if button_answer.index == answer.index {
+            answer_text = &button[0].text;
+        }
+        if button_answer.is_correct {
+            correct_text = &button[0].text;
+        }
+    }
+
+    let text = message.text().ok_or(BotErrors::NoMessageFound)?;
+    let (mut text, entities_offset) = if let Some(prefix) = text.strip_prefix(QUESTION_PRELUDE) {
+        (prefix.to_owned(), QUESTION_PRELUDE.chars().count())
+    } else {
+        (text.to_owned(), 0)
+    };
+
+    text.push_str("\n\n");
+    if !answer.is_correct {
+        text.push_str("\n❌ ");
+        text.push_str(answer_text);
+    }
+    text.push_str("\n✅ ");
+    text.push_str(correct_text);
+
+    bot.edit_message_reply_markup(chat_id, message.id)
+        .reply_markup(InlineKeyboardMarkup::default())
+        .send()
+        .await?;
+
+    let fixed_entities = message.entities().map(|entities| {
+        entities
+            .iter()
+            .filter(|entity| !matches!(entity.kind, MessageEntityKind::Spoiler))
+            .map(|entity| MessageEntity {
+                kind: entity.kind.clone(),
+                offset: entity.offset - entities_offset,
+                length: entity.length,
+            })
+            .collect::<Vec<_>>()
+    });
+
+    let mut call = bot.edit_message_text(chat_id, message.id, text);
+    if let Some(entities) = fixed_entities {
+        call = call.entities(entities)
+    }
+    call.send().await?;
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    ask_next_task(bot, context, chat_id).await?;
+
+    Ok(())
+}
+
+fn parse_command(command: &str) -> Result<proto::Command> {
+    let command = STANDARD.decode(command)?;
+    let command = proto::Command::decode(&command[..])?;
+    Ok(command)
 }
 
 async fn handle<F, Fut>(bot: &Bot, chat_id: ChatId, callback: F) -> HandlerResult
@@ -445,37 +301,17 @@ where
         Ok(_) => Ok(()),
         Err(err) => {
             log::error!("Error: {}", err);
-            bot.send_message(chat_id, format!("Произошла ошибка при ответе:\n{}\n\nНапишите (нажмите) /start, чтобы продолжить", err))
-                .send()
-                .await?;
+
+            bot.send_message(
+                chat_id,
+                format!(
+                    "Ууупс! случилась неприятность:\n{}\n\nНапишите (нажмите) /start, чтобы продолжить",
+                    err
+                ),
+            )
+            .send()
+            .await?;
             Ok(())
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn test_replace_mask_with_base_word() {
-        let sentence = "Ovo je *****.";
-        let base = "moja  kuća";
-        let result = super::replace_mask_with_base_word(sentence, base);
-        assert_eq!(result, "Ovo je `moja kuća`.");
-    }
-
-    #[test]
-    fn test_replace_several_masks() {
-        let sentence = "Ovo je ***** *****.";
-        let base = "moja  kuća";
-        let result = super::replace_mask_with_base_word(sentence, base);
-        assert_eq!(result, "Ovo je `moja` `kuća`.");
-    }
-
-    #[test]
-    fn test_replace_not_enough_words() {
-        let sentence = "Ovo je ***** *****.";
-        let base = "moja";
-        let result = super::replace_mask_with_base_word(sentence, base);
-        assert_eq!(result, "Ovo je `moja` `?????`.");
     }
 }

@@ -1,5 +1,6 @@
 FROM rust:latest as builder
 
+RUN apt update && apt install -y protobuf-compiler
 WORKDIR /usr/src/simple-words-builder
 COPY . .
 RUN cargo build --release
