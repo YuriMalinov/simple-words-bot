@@ -37,10 +37,7 @@ pub async fn ask_next_task<T: TaskInfoService, U: UserStateService>(
             None
         };
 
-        let task_id = user_data
-            .current_tasks
-            .pop()
-            .ok_or(BotErrors::NoTaskFound)?;
+        let task_id = user_data.current_tasks.pop().ok_or(BotErrors::NoTaskFound)?;
 
         context.user_data.update_state(chat_id, user_data).await?;
 
@@ -73,11 +70,7 @@ pub async fn ask_next_task<T: TaskInfoService, U: UserStateService>(
     let MessageData { message, buttons } = build_message(&task)?;
     log::debug!(
         "#{chat_id} asking: {}",
-        message[QUESTION_PRELUDE.len()..]
-            .trim()
-            .lines()
-            .next()
-            .unwrap_or_default()
+        message[QUESTION_PRELUDE.len()..].trim().lines().next().unwrap_or_default()
     );
 
     let message_data = message.clone();
@@ -153,17 +146,12 @@ fn build_message(task: &Task) -> anyhow::Result<MessageData> {
         .enumerate()
         .map(|(i, (variant, correct))| {
             let command = proto::Command {
-                command: Some(proto::command::Command::QuestionAnswer(
-                    proto::QuestionAnswer {
-                        task_id: task.id,
-                        index: i as i32,
-                        is_correct: *correct,
-                        time_asked_ts: time::SystemTime::now()
-                            .duration_since(time::UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis() as i64,
-                    },
-                )),
+                command: Some(proto::command::Command::QuestionAnswer(proto::QuestionAnswer {
+                    task_id: task.id,
+                    index: i as i32,
+                    is_correct: *correct,
+                    time_asked_ts: time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_millis() as i64,
+                })),
             };
             SimpleCommand {
                 text: (*variant).clone(),

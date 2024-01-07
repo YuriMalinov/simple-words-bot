@@ -32,9 +32,7 @@ pub(super) fn collect_filter_info(tasks: &[impl HasFilterValues]) -> Vec<FilterI
     let mut filters = HashMap::new();
     for task in tasks {
         for FilterValue { name, value } in task.get_filter_values() {
-            let filter_group = filters
-                .entry(name)
-                .or_insert_with(HashMap::<String, &str>::new);
+            let filter_group = filters.entry(name).or_insert_with(HashMap::<String, &str>::new);
             filter_group.insert(value.to_lowercase(), value);
         }
     }

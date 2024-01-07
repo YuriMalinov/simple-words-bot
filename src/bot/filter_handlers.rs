@@ -50,11 +50,8 @@ async fn change_filter<T: TaskInfoService, U: UserStateService>(
     let task_ids = context.tasks.get_task_ids(Some(&filter)).await?;
 
     if task_ids.is_empty() {
-        bot.send_message(
-            chat_id,
-            "Ничего не найдено по фильтру, попробуйте изменить его",
-        )
-        .await?;
+        bot.send_message(chat_id, "Ничего не найдено по фильтру, попробуйте изменить его")
+            .await?;
     } else {
         {
             let mut user_state = context.user_data.get_state(chat_id).await?;

@@ -12,9 +12,7 @@ use prost::Message;
 use rand::seq::SliceRandom;
 use teloxide::dptree::deps;
 use teloxide::prelude::*;
-use teloxide::types::{
-    InlineKeyboardButtonKind, InlineKeyboardMarkup, MessageEntity, MessageEntityKind,
-};
+use teloxide::types::{InlineKeyboardButtonKind, InlineKeyboardMarkup, MessageEntity, MessageEntityKind};
 use teloxide::Bot;
 use thiserror::Error;
 use time::OffsetDateTime;
@@ -49,10 +47,7 @@ pub struct BotConfig {
 }
 
 pub(super) trait TaskInfoService: std::fmt::Debug + Sync + Send {
-    fn get_task_ids(
-        &self,
-        filter: Option<&Filter>,
-    ) -> impl Future<Output = anyhow::Result<Vec<TaskId>>> + Send;
+    fn get_task_ids(&self, filter: Option<&Filter>) -> impl Future<Output = anyhow::Result<Vec<TaskId>>> + Send;
     fn collect_filter_info(&self) -> impl Future<Output = anyhow::Result<Vec<FilterInfo>>> + Send;
     fn get_task(&self, id: u64) -> impl Future<Output = anyhow::Result<Option<Task>>> + Send;
 }
@@ -102,11 +97,7 @@ impl UserInfo {
 pub(super) trait UserStateService: std::fmt::Debug + Sync + Send {
     fn touch_user(&self, user: &UserInfo) -> impl Future<Output = anyhow::Result<bool>> + Send;
     fn get_state(&self, chat_id: ChatId) -> impl Future<Output = anyhow::Result<UserData>> + Send;
-    fn update_state(
-        &self,
-        chat_id: ChatId,
-        update: UserData,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    fn update_state(&self, chat_id: ChatId, update: UserData) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
 impl UserStateService for Mutex<HashMap<i64, UserData>> {
@@ -205,16 +196,12 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
         let chat_id = message.chat.id;
         self.handle(&bot.clone(), chat_id, || async {
             if let Some(user) = message.from() {
-                self.user_data
-                    .touch_user(&UserInfo::from_tg_user(user))
-                    .await?;
+                self.user_data.touch_user(&UserInfo::from_tg_user(user)).await?;
             } else {
                 log::debug!("#{} got message from unknown user", chat_id);
             }
 
-            let text = message
-                .text()
-                .ok_or(anyhow::anyhow!("Not a text message"))?;
+            let text = message.text().ok_or(anyhow::anyhow!("Not a text message"))?;
 
             let (command, text) = if let Some(command) = text.trim().strip_prefix('/') {
                 let mut parts = command.splitn(2, ' ');
@@ -245,12 +232,7 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
         .await
     }
 
-    async fn send_feedback(
-        &self,
-        bot: &Bot,
-        text: Option<&str>,
-        message: &teloxide::types::Message,
-    ) -> Result<()> {
+    async fn send_feedback(&self, bot: &Bot, text: Option<&str>, message: &teloxide::types::Message) -> Result<()> {
         let feedback_chat_id = self.feedback_chat_id.ok_or(BotErrors::NoFeedbackChatId)?;
 
         let text = match text {
@@ -287,9 +269,7 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
 
     async fn handle_callback_query(&self, bot: Bot, query: CallbackQuery) -> HandlerResult {
         let message = query.message.as_ref().ok_or(BotErrors::NoMessageFound)?;
-        self.user_data
-            .touch_user(&UserInfo::from_tg_user(&query.from))
-            .await?;
+        self.user_data.touch_user(&UserInfo::from_tg_user(&query.from)).await?;
 
         let chat_id = message.chat.id;
         self.handle(&bot, chat_id, || async {
@@ -301,9 +281,7 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
 
             // For now the only command is answer
             match &command {
-                Command::QuestionAnswer(answer) => {
-                    self.handle_answer(&bot, chat_id, answer, message).await
-                }
+                Command::QuestionAnswer(answer) => self.handle_answer(&bot, chat_id, answer, message).await,
             }
         })
         .await
@@ -316,10 +294,7 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
         answer: &proto::QuestionAnswer,
         message: &teloxide::types::Message,
     ) -> HandlerResult {
-        log::debug!(
-            "#{chat_id} got answer correct={correct}",
-            correct = answer.is_correct
-        );
+        log::debug!("#{chat_id} got answer correct={correct}", correct = answer.is_correct);
 
         let buttons = &message
             .reply_markup()
@@ -330,12 +305,11 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
         let mut correct_text = &buttons[0][0].text;
         let mut answer_text = &buttons[0][0].text;
         for button in buttons {
-            let button_command =
-                if let InlineKeyboardButtonKind::CallbackData(command) = &button[0].kind {
-                    parse_command(command)?
-                } else {
-                    return Err(BotErrors::BadCallbackDataInButton.into());
-                };
+            let button_command = if let InlineKeyboardButtonKind::CallbackData(command) = &button[0].kind {
+                parse_command(command)?
+            } else {
+                return Err(BotErrors::BadCallbackDataInButton.into());
+            };
             let button_command = button_command.command.ok_or(BotErrors::WrongQuery)?;
 
             let Command::QuestionAnswer(button_answer) = button_command;
@@ -349,8 +323,7 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
         }
 
         let text = message.text().ok_or(BotErrors::NoMessageFound)?;
-        let (mut text, entities_offset) = if let Some(prefix) = text.strip_prefix(QUESTION_PRELUDE)
-        {
+        let (mut text, entities_offset) = if let Some(prefix) = text.strip_prefix(QUESTION_PRELUDE) {
             (prefix.to_owned(), QUESTION_PRELUDE.chars().count())
         } else {
             (text.to_owned(), 0)
