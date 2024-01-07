@@ -14,7 +14,8 @@ use crate::bot::bot_filter::parse_filter;
 use crate::model::Task;
 use crate::utils::{escape_telegram_symbols, rus_numeric};
 
-use super::bot_core::{BotContext, TaskInfoService, UserStateService};
+use super::bot_core::BotContext;
+use super::bot_services::{TaskInfoService, UserStateService};
 use super::proto;
 
 pub async fn ask_next_task<T: TaskInfoService, U: UserStateService>(
@@ -25,29 +26,33 @@ pub async fn ask_next_task<T: TaskInfoService, U: UserStateService>(
     let notify;
     let current_filter;
     let task = {
-        let mut user_data = context.user_data.get_state(chat_id).await?;
-        current_filter = user_data.filter.clone();
+        let task_id = context.user_data.take_next_task(chat_id).await?;
+        let task_id = match task_id {
+            Some(id) => {
+                notify = None;
+                current_filter = None;
+                id
+            }
+            None => {
+                let user_data = context.user_data.get_state(chat_id).await?;
+                current_filter = user_data.filter.clone();
+                let filter = current_filter.as_ref().map(|f| parse_filter(f));
 
-        notify = if user_data.current_tasks.is_empty() {
-            let filter = current_filter.as_ref().map(|f| parse_filter(f));
-            user_data.current_tasks = context.tasks.get_task_ids(filter.as_ref()).await?;
-            user_data.current_tasks.shuffle(&mut thread_rng());
-            Some(user_data.current_tasks.len())
-        } else {
-            None
+                let mut tasks = context.tasks.get_task_ids(filter.as_ref()).await?;
+                tasks.shuffle(&mut thread_rng());
+
+                notify = Some(tasks.len());
+                context.user_data.update_tasks(chat_id, &tasks).await?;
+                context
+                    .user_data
+                    .take_next_task(chat_id)
+                    .await?
+                    .ok_or(BotErrors::NoTaskGenerated)?
+            }
         };
 
-        let task_id = user_data.current_tasks.pop().ok_or(BotErrors::NoTaskFound)?;
-
-        context.user_data.update_state(chat_id, user_data).await?;
-
-        context
-            .tasks
-            .get_task(task_id)
-            .await
-            .transpose()
-            .ok_or(BotErrors::NoTaskFound)?
-    }?;
+        context.tasks.get_task(task_id).await?.ok_or(BotErrors::NoTaskFound)?
+    };
 
     if let Some(generated_tasks) = notify {
         bot.send_message(

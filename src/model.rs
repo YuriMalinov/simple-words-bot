@@ -2,11 +2,13 @@ use std::{fs, path::Path};
 
 use serde::Deserialize;
 
-pub type TaskId = u64;
+pub type TaskId = i64;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Task {
+    #[serde(default)]
     pub id: TaskId,
+    pub hash: u64,
     pub task: String,
     pub masked_task: String,
     pub correct: String,

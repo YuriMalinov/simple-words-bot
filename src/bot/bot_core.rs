@@ -1,7 +1,5 @@
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -9,19 +7,16 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use indoc::indoc;
 use prost::Message;
-use rand::seq::SliceRandom;
 use teloxide::dptree::deps;
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButtonKind, InlineKeyboardMarkup, MessageEntity, MessageEntityKind};
 use teloxide::Bot;
 use thiserror::Error;
-use time::OffsetDateTime;
 
 use crate::bot::ask_next_task_handler::QUESTION_PRELUDE;
-use crate::model::{Task, TaskId};
 
 use super::ask_next_task_handler::ask_next_task;
-use super::bot_filter::{collect_filter_info, match_task, Filter, FilterInfo};
+use super::bot_services::{TaskInfoService, UserInfo, UserStateService};
 use super::filter_handlers::handle_filter;
 use super::proto;
 use super::proto::command::Command;
@@ -33,102 +28,18 @@ pub(super) struct BotContext<T: TaskInfoService, U: UserStateService> {
     pub(super) feedback_chat_id: Option<ChatId>,
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct UserData {
-    pub(super) current_tasks: Vec<u64>,
-    pub(super) filter: Option<String>,
-}
-
 #[derive(Debug)]
 pub struct BotConfig {
-    pub tasks: Vec<Task>,
     pub token: String,
     pub feedback_chat_id: Option<ChatId>,
-}
-
-pub(super) trait TaskInfoService: std::fmt::Debug + Sync + Send {
-    fn get_task_ids(&self, filter: Option<&Filter>) -> impl Future<Output = anyhow::Result<Vec<TaskId>>> + Send;
-    fn collect_filter_info(&self) -> impl Future<Output = anyhow::Result<Vec<FilterInfo>>> + Send;
-    fn get_task(&self, id: u64) -> impl Future<Output = anyhow::Result<Option<Task>>> + Send;
-}
-
-impl TaskInfoService for Vec<Task> {
-    async fn get_task_ids(&self, filter: Option<&Filter>) -> anyhow::Result<Vec<TaskId>> {
-        let mut rng = rand::thread_rng();
-        let mut task_ids = self
-            .iter()
-            .filter(|task| match_task(&task.filters, filter.unwrap_or(&Filter::default())))
-            .map(|task| task.id)
-            .collect::<Vec<_>>();
-        task_ids.shuffle(&mut rng);
-        Ok(task_ids)
-    }
-
-    async fn collect_filter_info(&self) -> anyhow::Result<Vec<FilterInfo>> {
-        Ok(collect_filter_info(self))
-    }
-
-    async fn get_task(&self, id: u64) -> anyhow::Result<Option<Task>> {
-        Ok(self.iter().find(|task| task.id == id).cloned())
-    }
-}
-
-#[derive(Debug)]
-pub struct UserInfo {
-    pub uid: i64,
-    pub username: Option<String>,
-    pub full_name: String,
-    pub created_at: OffsetDateTime,
-    pub last_active_at: OffsetDateTime,
-}
-
-impl UserInfo {
-    pub fn from_tg_user(user: &teloxide::types::User) -> Self {
-        Self {
-            uid: user.id.0 as i64,
-            username: user.username.clone(),
-            full_name: user.full_name(),
-            created_at: OffsetDateTime::now_utc(),
-            last_active_at: OffsetDateTime::now_utc(),
-        }
-    }
-}
-
-pub(super) trait UserStateService: std::fmt::Debug + Sync + Send {
-    fn touch_user(&self, user: &UserInfo) -> impl Future<Output = anyhow::Result<bool>> + Send;
-    fn get_state(&self, chat_id: ChatId) -> impl Future<Output = anyhow::Result<UserData>> + Send;
-    fn update_state(&self, chat_id: ChatId, update: UserData) -> impl Future<Output = anyhow::Result<()>> + Send;
-}
-
-impl UserStateService for Mutex<HashMap<i64, UserData>> {
-    async fn touch_user(&self, user: &UserInfo) -> anyhow::Result<bool> {
-        let mut state = self.lock().unwrap();
-        let entry = state.entry(user.uid);
-        let is_new = matches!(entry, Entry::Vacant(_));
-        if is_new {
-            log::info!("New user: {:?}", user);
-        }
-        entry.or_default();
-        Ok(is_new)
-    }
-
-    async fn get_state(&self, chat_id: ChatId) -> anyhow::Result<UserData> {
-        let mut state = self.lock().unwrap();
-        let user_state = state.entry(chat_id.0).or_default();
-        Ok(user_state.clone())
-    }
-
-    async fn update_state(&self, chat_id: ChatId, update: UserData) -> anyhow::Result<()> {
-        let mut state = self.lock().unwrap();
-        state.insert(chat_id.0, update);
-        Ok(())
-    }
 }
 
 #[derive(Error, Debug)]
 pub enum BotErrors {
     #[error("No task found")]
     NoTaskFound,
+    #[error("No task generated")]
+    NoTaskGenerated,
     #[error("No message found")]
     NoMessageFound,
     #[error("No data")]
@@ -145,13 +56,16 @@ pub enum BotErrors {
 
 type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
-pub async fn setup_and_run_bot(config: BotConfig) -> Result<()> {
+pub async fn setup_and_run_bot(
+    config: BotConfig,
+    tasks: impl TaskInfoService + 'static,
+    user_state: impl UserStateService + 'static,
+) -> Result<()> {
     let bot = Bot::new(config.token);
 
-    let user_data = Mutex::new(HashMap::new());
     let context = BotContext {
-        tasks: Arc::new(config.tasks),
-        user_data: Arc::new(user_data),
+        tasks: Arc::new(tasks),
+        user_data: Arc::new(user_state),
         feedback_chat_id: config.feedback_chat_id,
     };
 

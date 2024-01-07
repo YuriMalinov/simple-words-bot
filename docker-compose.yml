@@ -1,0 +1,15 @@
+version: '3'
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: simple_words_bot
+      POSTGRES_USER: simple_words_bot
+      POSTGRES_PASSWORD: simple_words_bot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

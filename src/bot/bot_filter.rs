@@ -3,19 +3,19 @@ use std::collections::HashMap;
 use crate::model::{FilterValue, Task};
 
 #[derive(Debug, PartialEq, Default)]
-pub(super) struct FilterGroup {
-    values: Vec<String>,
+pub struct FilterGroup {
+    pub values: Vec<String>,
 }
 
 #[derive(Debug, PartialEq, Default)]
-pub(super) struct Filter {
-    groups: Vec<FilterGroup>,
+pub struct Filter {
+    pub groups: Vec<FilterGroup>,
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) struct FilterInfo {
-    pub(super) name: String,
-    pub(super) possible_values: Vec<String>,
+pub struct FilterInfo {
+    pub name: String,
+    pub possible_values: Vec<String>,
 }
 
 pub(super) trait HasFilterValues {

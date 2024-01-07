@@ -1,10 +1,18 @@
 use std::env;
 
 use anyhow::{Context, Result};
+use bot::{
+    bot_services_in_mem::{LocalTasks, LocalUserStateService},
+    BotConfig,
+};
+use service::user_state::PgUserService;
 use teloxide::types::ChatId;
 
 mod bot;
 mod model;
+mod service;
+#[cfg(test)]
+mod test_db;
 mod utils;
 
 #[tokio::main]
@@ -13,6 +21,10 @@ async fn main() -> Result<()> {
         println!("No .env file found, working without it");
     }
     pretty_env_logger::init_timed();
+
+    let connection_url = env::var("DATABASE_URL").context("No DATABASE_URL environment")?;
+    let pool = sqlx::postgres::PgPool::connect(&connection_url).await?;
+    sqlx::migrate!().run(&pool).await?;
 
     let data_dir = env::var("DATA_DIR").unwrap_or("data".to_owned());
 
@@ -30,12 +42,28 @@ async fn main() -> Result<()> {
         .ok();
 
     log::info!("Got {} tasks, starting bot.", tasks.len());
-    bot::setup_and_run_bot(bot::BotConfig {
-        tasks,
-        token,
-        feedback_chat_id,
-    })
-    .await?;
+    let args: Vec<String> = env::args().collect();
+    if args.get(1) == Some(&"local".to_owned()) {
+        bot::setup_and_run_bot(
+            BotConfig {
+                token,
+                feedback_chat_id,
+            },
+            LocalTasks::new(tasks),
+            LocalUserStateService::default(),
+        )
+        .await?;
+    } else {
+        bot::setup_and_run_bot(
+            BotConfig {
+                token,
+                feedback_chat_id,
+            },
+            LocalTasks::new(tasks),
+            PgUserService::new(pool),
+        )
+        .await?;
+    }
 
     Ok(())
 }

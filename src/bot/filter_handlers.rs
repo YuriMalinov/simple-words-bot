@@ -10,8 +10,9 @@ use crate::utils::escape_telegram_symbols;
 
 use super::{
     ask_next_task_handler::ask_next_task,
-    bot_core::{BotContext, TaskInfoService, UserStateService},
+    bot_core::BotContext,
     bot_filter::parse_filter,
+    bot_services::{TaskInfoService, UserStateService},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -36,12 +37,11 @@ async fn change_filter<T: TaskInfoService, U: UserStateService>(
     context: &BotContext<T, U>,
 ) -> anyhow::Result<()> {
     if filter_text == "-" {
-        {
-            let mut user_state = context.user_data.get_state(chat_id).await?;
-            user_state.filter = None;
-            user_state.current_tasks = vec![];
-            context.user_data.update_state(chat_id, user_state).await?;
-        }
+        let mut user_state = context.user_data.get_state(chat_id).await?;
+        user_state.filter = None;
+        context.user_data.update_state(chat_id, user_state).await?;
+        context.user_data.update_tasks(chat_id, &[]).await?;
+
         ask_next_task(bot, context, chat_id).await?;
         return Ok(());
     }
@@ -53,12 +53,10 @@ async fn change_filter<T: TaskInfoService, U: UserStateService>(
         bot.send_message(chat_id, "Ничего не найдено по фильтру, попробуйте изменить его")
             .await?;
     } else {
-        {
-            let mut user_state = context.user_data.get_state(chat_id).await?;
-            user_state.filter = Some(filter_text.into());
-            user_state.current_tasks = vec![];
-            context.user_data.update_state(chat_id, user_state).await?;
-        }
+        let mut user_state = context.user_data.get_state(chat_id).await?;
+        user_state.filter = Some(filter_text.into());
+        context.user_data.update_state(chat_id, user_state).await?;
+        context.user_data.update_tasks(chat_id, &[]).await?;
 
         ask_next_task(bot, context, chat_id).await?;
     }
