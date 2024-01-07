@@ -10,48 +10,47 @@ use teloxide::types::{InlineKeyboardButton, ParseMode, ReplyMarkup};
 use teloxide::Bot;
 
 use crate::bot::bot_core::BotErrors;
-use crate::bot::filter_handlers::select_tasks;
+use crate::bot::bot_filter::parse_filter;
 use crate::model::Task;
 use crate::utils::{escape_telegram_symbols, rus_numeric};
 
-use super::bot_core::BotContext;
+use super::bot_core::{BotContext, TaskInfoService, UserStateService};
 use super::proto;
 
-pub(super) async fn ask_next_task(
+pub async fn ask_next_task<T: TaskInfoService, U: UserStateService>(
     bot: &Bot,
-    context: &BotContext,
+    context: &BotContext<T, U>,
     chat_id: ChatId,
 ) -> anyhow::Result<()> {
-    // context
-    //     .tasks
-    //     .choose(&mut thread_rng())
-    //     .ok_or(BotErrors::NoTaskFound)?;
     let notify;
     let current_filter;
     let task = {
-        // in case lock is poisoned it won't recover - best to kill the bot and restart TODO: check if that'll work actually
-        let mut user_data = context.user_data.lock().expect("Can't take user data");
-        let user_data = user_data.entry(chat_id).or_default();
+        let mut user_data = context.user_data.get_state(chat_id).await?;
+        current_filter = user_data.filter.clone();
 
         notify = if user_data.current_tasks.is_empty() {
-            user_data.current_tasks = select_tasks(user_data, &context.tasks)?;
+            let filter = current_filter.as_ref().map(|f| parse_filter(f));
+            user_data.current_tasks = context.tasks.get_task_ids(filter.as_ref()).await?;
+            user_data.current_tasks.shuffle(&mut thread_rng());
             Some(user_data.current_tasks.len())
         } else {
             None
         };
-        current_filter = user_data.filter.clone();
 
         let task_id = user_data
             .current_tasks
             .pop()
             .ok_or(BotErrors::NoTaskFound)?;
 
+        context.user_data.update_state(chat_id, user_data).await?;
+
         context
             .tasks
-            .iter()
-            .find(|task| task.id == task_id)
+            .get_task(task_id)
+            .await
+            .transpose()
             .ok_or(BotErrors::NoTaskFound)?
-    };
+    }?;
 
     if let Some(generated_tasks) = notify {
         bot.send_message(
@@ -71,7 +70,7 @@ pub(super) async fn ask_next_task(
         .await?;
     }
 
-    let MessageData { message, buttons } = build_message(task)?;
+    let MessageData { message, buttons } = build_message(&task)?;
     log::debug!(
         "#{chat_id} asking: {}",
         message[QUESTION_PRELUDE.len()..]

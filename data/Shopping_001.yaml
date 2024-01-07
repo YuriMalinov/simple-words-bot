@@ -1,0 +1,171 @@
+theme: Shopping
+category: cases
+tasks:
+- id: 17673508468553938905
+  task: U velikom supermarketu uvek ima svežeg voća i povrća.
+  info:
+  - В большом супермаркете всегда есть свежие фрукты и овощи.
+  masked_task: U ***** uvek ima svežeg voća i povrća.
+  correct: velikom supermarketu
+  base: veliki supermarket
+  hints:
+  - name: Пол
+    value: masculine
+  - name: Число
+    value: singular
+  - name: Падеж
+    value: locative
+  - name: Использование падежа
+    value: местный падеж используется для указания места, где что-то происходит, с
+      предлогом 'у', который означает 'в'
+  filters:
+  - name: Падеж
+    value: locative
+  - name: Тема
+    value: Shopping
+  wrong_answers:
+  - velikem supermarketa
+  - veliki supermarketu
+  - velikoj supermarketa
+  - velikog supermarketa
+  - velikim supermarket
+- id: 6223089340621022133
+  task: Prodavačica u butiku mi je preporučila elegantnu haljinu.
+  info:
+  - Продавщица в бутике посоветовала мне элегантное платье.
+  masked_task: Prodavačica u ***** mi je preporučila elegantnu haljinu.
+  correct: butiku
+  base: butik
+  hints:
+  - name: Пол
+    value: masculine
+  - name: Число
+    value: singular
+  - name: Падеж
+    value: locative
+  - name: Использование падежа
+    value: местный падеж используется для обозначения местоположения с предлогом 'у',
+      который означает 'в'
+  filters:
+  - name: Падеж
+    value: locative
+  - name: Тема
+    value: Shopping
+  wrong_answers:
+  - butika
+  - butiku
+  - butikom
+  - butik
+  - butikovima
+- id: 3625930053123463967
+  task: Prodavačica u butiku mi je preporučila elegantnu haljinu.
+  info:
+  - Продавщица в бутике посоветовала мне элегантное платье.
+  masked_task: Prodavačica u butiku mi je preporučila *****.
+  correct: elegantnu haljinu
+  base: elegantna haljina
+  hints:
+  - name: Пол
+    value: feminine
+  - name: Число
+    value: singular
+  - name: Падеж
+    value: accusative
+  - name: Использование падежа
+    value: винительный падеж используется как прямое дополнение глагола 'препоручила',
+      который относится к рекомендуемому объекту
+  filters:
+  - name: Падеж
+    value: accusative
+  - name: Тема
+    value: Shopping
+  wrong_answers:
+  - elegantni haljine
+  - elegantnoj haljini
+  - elegantnom haljina
+  - elegantna haljina
+  - elegantne haljinu
+- id: 10890597046828532967
+  task: Dečak se raduje novim patikama koje smo kupili.
+  info:
+  - Мальчик радуется новым кроссовкам, которые мы купили.
+  masked_task: Dečak se raduje ***** koje smo kupili. *(множ. число)*
+  correct: novim patikama
+  base: nove patike
+  hints:
+  - name: Пол
+    value: feminine
+  - name: Число
+    value: plural
+  - name: Падеж
+    value: dative
+  - name: Использование падежа
+    value: дательный падеж используется, чтобы показать косвенный объект глагола 'радует',
+      то есть то, чему мальчик радуется
+  filters:
+  - name: Падеж
+    value: dative
+  - name: Тема
+    value: Shopping
+  wrong_answers:
+  - nove patikama
+  - novim patike
+  - novoj patikama
+  - novim patikama
+  - nove patiku
+- id: 7113544313859570764
+  task: Kupila sam najlepši šešir u celoj prodavnici juče.
+  info:
+  - Вчера я купила самую красивую шляпу во всем магазине.
+  masked_task: Kupila sam najlepši šešir u ***** juče.
+  correct: celoj prodavnici
+  base: cela prodavnica
+  hints:
+  - name: Пол
+    value: feminine
+  - name: Число
+    value: singular
+  - name: Падеж
+    value: locative
+  - name: Использование падежа
+    value: местный падеж с предлогом 'у', чтобы обозначить местоположение внутри всего
+      магазина, где была куплена шляпа
+  filters:
+  - name: Падеж
+    value: locative
+  - name: Тема
+    value: Shopping
+  wrong_answers:
+  - celu prodavnici
+  - celoj prodavnicu
+  - celu prodavnice
+  - celim prodavnica
+  - celo prodavnici
+- id: 16466248517708289463
+  task: Bez popusta, cene u ovoj radnji su previsoke.
+  info:
+  - Без скидки, цены в этом магазине слишком высоки.
+  masked_task: Bez popusta, cene u ***** su previsoke.
+  correct: ovoj radnji
+  base: ova radnja
+  hints:
+  - name: Пол
+    value: feminine
+  - name: Число
+    value: singular
+  - name: Падеж
+    value: locative
+  - name: Использование падежа
+    value: местный падеж используется с предлогом 'у', чтобы указать место, где цены
+      слишком высоки
+  filters:
+  - name: Падеж
+    value: locative
+  - name: Тема
+    value: Shopping
+  wrong_answers:
+  - ove radnji
+  - ovaj radnji
+  - ovo radnju
+  - ovoj radnje
+  - ovi radnji

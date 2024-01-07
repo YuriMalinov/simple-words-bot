@@ -2,9 +2,11 @@ use std::{fs, path::Path};
 
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+pub type TaskId = u64;
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Task {
-    pub id: u64,
+    pub id: TaskId,
     pub task: String,
     pub masked_task: String,
     pub correct: String,
@@ -15,13 +17,13 @@ pub struct Task {
     pub wrong_answers: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Hint {
     pub name: String,
     pub value: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct FilterValue {
     pub name: String,
     pub value: String,

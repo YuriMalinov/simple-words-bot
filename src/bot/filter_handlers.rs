@@ -1,5 +1,4 @@
 use indoc::indoc;
-use rand::seq::SliceRandom;
 use teloxide::{
     payloads::SendMessageSetters,
     requests::{Request, Requester},
@@ -7,22 +6,22 @@ use teloxide::{
     Bot,
 };
 
-use crate::{model::Task, utils::escape_telegram_symbols};
+use crate::utils::escape_telegram_symbols;
 
 use super::{
     ask_next_task_handler::ask_next_task,
-    bot_core::{BotContext, UserData},
-    bot_filter::{collect_filter_info, match_task, parse_filter},
+    bot_core::{BotContext, TaskInfoService, UserStateService},
+    bot_filter::parse_filter,
 };
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum FilterErrors {}
 
-pub(super) async fn handle_filter(
+pub(super) async fn handle_filter<T: TaskInfoService, U: UserStateService>(
     bot: &Bot,
     command_text: Option<&str>,
     chat_id: ChatId,
-    context: &BotContext,
+    context: &BotContext<T, U>,
 ) -> anyhow::Result<()> {
     match command_text {
         Some(text) => change_filter(bot, text, chat_id, context).await,
@@ -30,30 +29,25 @@ pub(super) async fn handle_filter(
     }
 }
 
-async fn change_filter(
+async fn change_filter<T: TaskInfoService, U: UserStateService>(
     bot: &Bot,
     filter_text: &str,
     chat_id: ChatId,
-    context: &BotContext,
+    context: &BotContext<T, U>,
 ) -> anyhow::Result<()> {
     if filter_text == "-" {
         {
-            let mut state = context.user_data.lock().unwrap();
-            let user_state = state.entry(chat_id).or_default();
+            let mut user_state = context.user_data.get_state(chat_id).await?;
             user_state.filter = None;
             user_state.current_tasks = vec![];
+            context.user_data.update_state(chat_id, user_state).await?;
         }
         ask_next_task(bot, context, chat_id).await?;
         return Ok(());
     }
 
     let filter = parse_filter(filter_text);
-    let task_ids = context
-        .tasks
-        .iter()
-        .filter(|task| match_task(&task.filters, &filter))
-        .map(|task| task.id)
-        .collect::<Vec<_>>();
+    let task_ids = context.tasks.get_task_ids(Some(&filter)).await?;
 
     if task_ids.is_empty() {
         bot.send_message(
@@ -63,10 +57,10 @@ async fn change_filter(
         .await?;
     } else {
         {
-            let mut state = context.user_data.lock().unwrap();
-            let user_state = state.entry(chat_id).or_default();
+            let mut user_state = context.user_data.get_state(chat_id).await?;
             user_state.filter = Some(filter_text.into());
             user_state.current_tasks = vec![];
+            context.user_data.update_state(chat_id, user_state).await?;
         }
 
         ask_next_task(bot, context, chat_id).await?;
@@ -74,25 +68,10 @@ async fn change_filter(
     Ok(())
 }
 
-pub(super) fn select_tasks(user_data: &mut UserData, tasks: &[Task]) -> anyhow::Result<Vec<u64>> {
-    let mut current_tasks = if let Some(filter) = &user_data.filter {
-        let filter = parse_filter(filter);
-        tasks
-            .iter()
-            .filter(|task| match_task(&task.filters, &filter))
-            .map(|task| task.id)
-            .collect::<Vec<_>>()
-    } else {
-        tasks.iter().map(|task| task.id).collect::<Vec<_>>()
-    };
-    current_tasks.shuffle(&mut rand::thread_rng());
-    Ok(current_tasks)
-}
-
-async fn handle_filter_help(
+async fn handle_filter_help<T: TaskInfoService, U: UserStateService>(
     bot: &Bot,
     chat_id: ChatId,
-    context: &BotContext,
+    context: &BotContext<T, U>,
 ) -> anyhow::Result<()> {
     let mut message = indoc! {r#"
         Фильтр позволяет выбрать задания по определенным критериям.
@@ -107,7 +86,7 @@ async fn handle_filter_help(
         Возможные значения:
     "#}.to_owned();
 
-    let filter_info = collect_filter_info(&context.tasks);
+    let filter_info = context.tasks.collect_filter_info().await?;
     for filter in filter_info {
         let values = filter.possible_values.join(", ");
         let composed = format!("- {}: {}\n", filter.name, values);

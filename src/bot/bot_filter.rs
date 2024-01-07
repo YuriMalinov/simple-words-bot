@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use crate::model::{FilterValue, Task};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub(super) struct FilterGroup {
     values: Vec<String>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub(super) struct Filter {
     groups: Vec<FilterGroup>,
 }
