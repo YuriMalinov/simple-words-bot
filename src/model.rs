@@ -1,14 +1,14 @@
 use std::{fs, path::Path};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub type TaskId = i64;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Task {
     #[serde(default)]
     pub id: TaskId,
-    pub hash: u64,
+    pub hash: i64,
     pub task: String,
     pub masked_task: String,
     pub correct: String,
@@ -19,13 +19,13 @@ pub struct Task {
     pub wrong_answers: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Hint {
     pub name: String,
     pub value: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FilterValue {
     pub name: String,
     pub value: String,

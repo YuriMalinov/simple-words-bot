@@ -22,7 +22,7 @@ pub struct LocalTasks {
 impl LocalTasks {
     pub fn new(mut tasks: Vec<Task>) -> Self {
         for task in &mut tasks {
-            task.id = (task.hash % (std::i64::MAX as u64)) as i64;
+            task.id = task.hash;
         }
         Self { tasks }
     }

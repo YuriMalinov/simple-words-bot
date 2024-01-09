@@ -50,7 +50,7 @@ pub(super) fn collect_filter_info(tasks: &[impl HasFilterValues]) -> Vec<FilterI
     result
 }
 
-pub(super) fn match_task(values: &[FilterValue], filter: &Filter) -> bool {
+pub fn match_task(values: &[FilterValue], filter: &Filter) -> bool {
     for filter_group in &filter.groups {
         if !match_filter_group(values, filter_group) {
             return false;

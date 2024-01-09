@@ -5,6 +5,7 @@ use bot::{
     bot_services_in_mem::{LocalTasks, LocalUserStateService},
     BotConfig,
 };
+use service::task_info_service::PgTaskInfoService;
 use service::user_state::PgUserService;
 use teloxide::types::ChatId;
 
@@ -22,12 +23,14 @@ async fn main() -> Result<()> {
     }
     pretty_env_logger::init_timed();
 
+    log::info!("Connecting to database...");
     let connection_url = env::var("DATABASE_URL").context("No DATABASE_URL environment")?;
     let pool = sqlx::postgres::PgPool::connect(&connection_url).await?;
     sqlx::migrate!().run(&pool).await?;
 
     let data_dir = env::var("DATA_DIR").unwrap_or("data".to_owned());
 
+    log::info!("Reading tasks from {data_dir}...");
     let task_groups = model::scan_data_directory(&data_dir)?;
     let tasks = task_groups
         .into_iter()
@@ -54,13 +57,16 @@ async fn main() -> Result<()> {
         )
         .await?;
     } else {
+        let task_info_service = PgTaskInfoService::new(pool.clone());
+        task_info_service.update_tasks(&tasks).await.context("Failed to update tasks")?;
+
         bot::setup_and_run_bot(
             BotConfig {
                 token,
                 feedback_chat_id,
             },
-            LocalTasks::new(tasks),
-            PgUserService::new(pool),
+            task_info_service,
+            PgUserService::new(pool.clone()),
         )
         .await?;
     }

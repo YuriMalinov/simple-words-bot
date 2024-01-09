@@ -14,15 +14,16 @@ CREATE TABLE user_state (
     PRIMARY KEY (chat_id)
 );
 
-CREATE TABLE task (
+CREATE TABLE task_info (
     id bigserial NOT NULL,
     hash bigint not null,
     active boolean NOT NULL,
+    filters jsonb NOT NULL,
     task_data jsonb NOT NULL,
     PRIMARY KEY (id)
 );
 
-create unique index task_hash on task (hash);
+create unique index task_hash on task_info (hash);
 
 create table user_task (
     id bigserial not null,

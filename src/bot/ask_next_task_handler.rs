@@ -201,7 +201,7 @@ mod test {
         let sentence = "Ovo je *****.";
         let base = "moja  kuća";
         let result = super::replace_mask_with_base_word(sentence, base);
-        assert_eq!(result, "Ovo je `moja kuća`.");
+        assert_eq!(result, "Ovo je `[moja kuća]`.");
     }
 
     #[test]
@@ -209,7 +209,7 @@ mod test {
         let sentence = "Ovo je ***** *****.";
         let base = "moja  kuća";
         let result = super::replace_mask_with_base_word(sentence, base);
-        assert_eq!(result, "Ovo je `moja` `kuća`.");
+        assert_eq!(result, "Ovo je `[moja]` `[kuća]`.");
     }
 
     #[test]
@@ -217,6 +217,6 @@ mod test {
         let sentence = "Ovo je ***** *****.";
         let base = "moja";
         let result = super::replace_mask_with_base_word(sentence, base);
-        assert_eq!(result, "Ovo je `moja` `?????`.");
+        assert_eq!(result, "Ovo je `[moja]` `[?????]`.");
     }
 }
