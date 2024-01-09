@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, path::Path};
 
 use anyhow::{Context, Result};
 use bot::{
@@ -7,6 +7,7 @@ use bot::{
 };
 use service::task_info_service::PgTaskInfoService;
 use service::user_state::PgUserService;
+use sqlx::postgres::{PgConnectOptions, PgPool};
 use teloxide::types::ChatId;
 
 mod bot;
@@ -25,7 +26,20 @@ async fn main() -> Result<()> {
 
     log::info!("Connecting to database...");
     let connection_url = env::var("DATABASE_URL").context("No DATABASE_URL environment")?;
-    let pool = sqlx::postgres::PgPool::connect(&connection_url).await?;
+
+    let pgcert = Path::new(".pgcert");
+    let connect_options = if pgcert.exists() {
+        log::info!("Found .pgcert file, using it for SSL connection");
+        let pgcert = std::fs::read(pgcert)?;
+        connection_url
+            .parse::<PgConnectOptions>()?
+            .ssl_root_cert_from_pem(pgcert)
+            .ssl_mode(sqlx::postgres::PgSslMode::VerifyCa)
+    } else {
+        connection_url.parse::<PgConnectOptions>()?
+    };
+
+    let pool = PgPool::connect_with(connect_options).await?;
     sqlx::migrate!().run(&pool).await?;
 
     let data_dir = env::var("DATA_DIR").unwrap_or("data".to_owned());

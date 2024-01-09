@@ -1,4 +1,4 @@
-FROM rust:latest as builder
+FROM rust:1.75 as builder
 
 RUN apt update && apt install -y protobuf-compiler
 WORKDIR /usr/src/simple-words-builder

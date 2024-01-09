@@ -1,7 +1,7 @@
 theme: Shopping
 category: cases
 tasks:
-- id: 17673508468553938905
+- hash: 8450136431699163097
   task: U velikom supermarketu uvek ima svežeg voća i povrća.
   info:
   - В большом супермаркете всегда есть свежие фрукты и овощи.
@@ -29,7 +29,7 @@ tasks:
   - velikoj supermarketa
   - velikog supermarketa
   - velikim supermarket
-- id: 6223089340621022133
+- hash: 6223089340621022133
   task: Prodavačica u butiku mi je preporučila elegantnu haljinu.
   info:
   - Продавщица в бутике посоветовала мне элегантное платье.
@@ -57,7 +57,7 @@ tasks:
   - butikom
   - butik
   - butikovima
-- id: 3625930053123463967
+- hash: 3625930053123463967
   task: Prodavačica u butiku mi je preporučila elegantnu haljinu.
   info:
   - Продавщица в бутике посоветовала мне элегантное платье.
@@ -85,7 +85,7 @@ tasks:
   - elegantnom haljina
   - elegantna haljina
   - elegantne haljinu
-- id: 10890597046828532967
+- hash: 1667225009973757159
   task: Dečak se raduje novim patikama koje smo kupili.
   info:
   - Мальчик радуется новым кроссовкам, которые мы купили.
@@ -113,7 +113,7 @@ tasks:
   - novoj patikama
   - novim patikama
   - nove patiku
-- id: 7113544313859570764
+- hash: 7113544313859570764
   task: Kupila sam najlepši šešir u celoj prodavnici juče.
   info:
   - Вчера я купила самую красивую шляпу во всем магазине.
@@ -141,7 +141,7 @@ tasks:
   - celu prodavnice
   - celim prodavnica
   - celo prodavnici
-- id: 16466248517708289463
+- hash: 7242876480853513655
   task: Bez popusta, cene u ovoj radnji su previsoke.
   info:
   - Без скидки, цены в этом магазине слишком высоки.

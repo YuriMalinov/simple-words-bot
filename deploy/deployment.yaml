@@ -15,18 +15,35 @@ spec:
       containers:
         - name: simple-words-bot
           image: cr.yandex/crpjfqo85tkck6b14h4m/simple-words-bot:latest
+          volumeMounts:
+            - name: pgcert
+              mountPath: /usr/src/words-bot/.pgcert
+              subPath: .pgcert
+              readOnly: true
           env:
             - name: TELEGRAM_BOT_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: simple-words-bot-token
-                  key: token
+                  name: simple-words-bot-secrets
+                  key: bot-token
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: simple-words-bot-secrets
+                  key: pg-url
             - name: RUST_BACKTRACE
               value: "1"
             - name: RUST_LOG
-              value: debug
+              value: debug,debug,hyper=info,sqlx=info
             - name: FEEDBACK_CHAT_ID
               valueFrom:
                 configMapKeyRef:
                   name: simple-words-bot-config
                   key: feedback_chat_id
+      volumes:
+        - name: pgcert
+          configMap:
+            name: pgcert
+            items:
+              - key: root.crt
+                path: .pgcert
