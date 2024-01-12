@@ -1,5 +1,4 @@
-use std::time;
-
+use ::time::OffsetDateTime;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use prost::Message;
@@ -150,12 +149,14 @@ fn build_message(task: &Task) -> anyhow::Result<MessageData> {
         .iter()
         .enumerate()
         .map(|(i, (variant, correct))| {
+            let time = OffsetDateTime::now_utc();
+            let time = time.unix_timestamp() * 1000 + (time.millisecond() as i64);
             let command = proto::Command {
                 command: Some(proto::command::Command::QuestionAnswer(proto::QuestionAnswer {
                     task_id: task.id,
                     index: i as i32,
                     is_correct: *correct,
-                    time_asked_ts: time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_millis() as i64,
+                    time_asked_ts: time,
                 })),
             };
             SimpleCommand {

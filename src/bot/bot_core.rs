@@ -12,8 +12,12 @@ use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButtonKind, InlineKeyboardMarkup, MessageEntity, MessageEntityKind};
 use teloxide::Bot;
 use thiserror::Error;
+use time::OffsetDateTime;
+use tokio::join;
 
 use crate::bot::ask_next_task_handler::QUESTION_PRELUDE;
+use crate::bot::bot_services::Answer;
+use crate::utils::rus_numeric;
 
 use super::ask_next_task_handler::ask_next_task;
 use super::bot_services::{TaskInfoService, UserInfo, UserStateService};
@@ -152,7 +156,7 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
         let text = match text {
             Some(text) => text,
             None => {
-                bot.send_message(message.chat.id, "Пожалуйста, напишите текст, что хотите отправить. В дополнение можно ответить на сообщение бота, чтобы сослаться на него.").send().await?;
+                bot.send_message(message.chat.id, "Пожалуйста, напишите текст, что хотите отправить. Можно ответить на сообщение бота, чтобы сослаться на него.").send().await?;
                 return Ok(());
             }
         };
@@ -195,7 +199,9 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
 
             // For now the only command is answer
             match &command {
-                Command::QuestionAnswer(answer) => self.handle_answer(&bot, chat_id, answer, message).await,
+                Command::QuestionAnswer(answer) => {
+                    self.handle_answer(&bot, query.from.id, chat_id, answer, message).await
+                }
             }
         })
         .await
@@ -204,6 +210,7 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
     async fn handle_answer(
         &self,
         bot: &Bot,
+        user_id: UserId,
         chat_id: ChatId,
         answer: &proto::QuestionAnswer,
         message: &teloxide::types::Message,
@@ -272,7 +279,46 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
         if let Some(entities) = fixed_entities {
             call = call.entities(entities)
         }
-        call.send().await?;
+
+        let time = OffsetDateTime::from_unix_timestamp(answer.time_asked_ts / 1000)?
+            + Duration::from_millis((answer.time_asked_ts % 1000) as u64);
+
+        let record_answer = self.user_data.record_anwer(Answer {
+            uid: user_id.0 as i64,
+            task_id: answer.task_id,
+            correct: answer.is_correct,
+            asked_at: time,
+            answered_at: OffsetDateTime::now_utc(),
+        });
+
+        let (send, record) = join!(call.send(), record_answer);
+        send?;
+        record?;
+
+        let stat = self
+            .user_data
+            .get_answer_stat(user_id.0 as i64, Duration::from_secs(60 * 60 * 24))
+            .await?;
+
+        if stat.count % 5 == 0 {
+            let percent = stat.correct * 100 / stat.count;
+            let progress = match percent {
+                0..=30 => "Поднажмём! 🥺",
+                31..=90 => "Так держать! 🙂",
+                _ => "Превосходно! 😎",
+            };
+            bot.send_message(
+                chat_id,
+                format!(
+                    "{correct} правильно из {count} {tasks} за последние 24 часа ({percent}% правильных). {progress}",
+                    correct = stat.correct,
+                    count = stat.count,
+                    tasks = rus_numeric(stat.count as usize, "задач", "задача", "задачи"),
+                ),
+            )
+            .send()
+            .await?;
+        }
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 

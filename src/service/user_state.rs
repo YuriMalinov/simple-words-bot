@@ -91,7 +91,7 @@ impl UserStateService for PgUserService {
                     SELECT task_id
                     FROM user_task
                     WHERE chat_id = $1
-                    ORDER BY task_id
+                    ORDER BY id
                     LIMIT 1
                 )
                 RETURNING task_id
