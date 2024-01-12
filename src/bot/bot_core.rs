@@ -179,8 +179,9 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
             .map(|r| format!("\n\nReply to:\n\n{}", r))
             .unwrap_or_default();
 
-        let message = format!("Feedback from {username}:\n\n{text}{reply}");
-        bot.send_message(feedback_chat_id, message).send().await?;
+        let feedback_text = format!("Feedback from {username}:\n\n{text}{reply}");
+        bot.send_message(feedback_chat_id, feedback_text).send().await?;
+        bot.send_message(message.chat.id, "Спасибо за отзыв!").send().await?;
 
         Ok(())
     }
