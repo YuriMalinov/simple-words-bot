@@ -53,10 +53,13 @@ async fn main() -> Result<()> {
 
     let token = env::var("TELEGRAM_BOT_TOKEN").context("No TELEGRAM_BOT_TOKEN environment")?;
     let feedback_chat_id = env::var("FEEDBACK_CHAT_ID")
-        .context("No FEEDBACK_CHAT_ID environment")?
-        .parse::<i64>()
-        .map(ChatId)
-        .ok();
+        .ok()
+        .and_then(|chat_id| chat_id.parse::<i64>().ok())
+        .map(ChatId);
+
+    if feedback_chat_id.is_none() {
+        log::warn!("No FEEDBACK_CHAT_ID environment, feedback will throw errors");
+    }
 
     log::info!("Got {} tasks, starting bot.", tasks.len());
     let args: Vec<String> = env::args().collect();

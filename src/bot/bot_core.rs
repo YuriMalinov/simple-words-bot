@@ -19,9 +19,7 @@ use crate::bot::ask_next_task_handler::QUESTION_PRELUDE;
 use crate::bot::bot_services::Answer;
 use crate::utils::rus_numeric;
 
-use super::ask_next_task_handler::ask_next_task;
 use super::bot_services::{TaskInfoService, UserInfo, UserStateService};
-use super::filter_handlers::handle_filter;
 use super::proto;
 use super::proto::command::Command;
 
@@ -130,16 +128,16 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
 
             match command {
                 "start" => {
-                    ask_next_task(&bot, self, chat_id).await?;
+                    self.ask_next_task(&bot, chat_id).await?;
                 }
                 "feedback" => {
                     self.send_feedback(&bot, text, &message).await?;
                 }
                 "filter" => {
-                    handle_filter(&bot, text, chat_id, self).await?;
+                    self.handle_filter(&bot, text, chat_id).await?;
                 }
                 "filter-reset" => {
-                    handle_filter(&bot, Some("-"), chat_id, self).await?;
+                    self.handle_filter(&bot, Some("-"), chat_id).await?;
                 }
                 _ => {
                     bot.send_message(chat_id, HELP_TEXT).send().await?;
@@ -323,7 +321,7 @@ impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        ask_next_task(bot, self, chat_id).await?;
+        self.ask_next_task(bot, chat_id).await?;
 
         Ok(())
     }

@@ -17,44 +17,40 @@ use super::bot_core::BotContext;
 use super::bot_services::{TaskInfoService, UserStateService};
 use super::proto;
 
-pub async fn ask_next_task<T: TaskInfoService, U: UserStateService>(
-    bot: &Bot,
-    context: &BotContext<T, U>,
-    chat_id: ChatId,
-) -> anyhow::Result<()> {
-    let notify;
-    let current_filter;
-    let task = {
-        let task_id = context.user_data.take_next_task(chat_id).await?;
-        let task_id = match task_id {
-            Some(id) => {
-                notify = None;
-                current_filter = None;
-                id
-            }
-            None => {
-                let user_data = context.user_data.get_state(chat_id).await?;
-                current_filter = user_data.filter.clone();
-                let filter = current_filter.as_ref().map(|f| parse_filter(f));
+impl<T: TaskInfoService, U: UserStateService> BotContext<T, U> {
+    pub async fn ask_next_task(&self, bot: &Bot, chat_id: ChatId) -> anyhow::Result<()> {
+        let notify;
+        let current_filter;
+        let task = {
+            let task_id = self.user_data.take_next_task(chat_id).await?;
+            let task_id = match task_id {
+                Some(id) => {
+                    notify = None;
+                    current_filter = None;
+                    id
+                }
+                None => {
+                    let user_data = self.user_data.get_state(chat_id).await?;
+                    current_filter = user_data.filter.clone();
+                    let filter = current_filter.as_ref().map(|f| parse_filter(f));
 
-                let mut tasks = context.tasks.get_task_ids(filter.as_ref()).await?;
-                tasks.shuffle(&mut thread_rng());
+                    let mut tasks = self.tasks.get_task_ids(filter.as_ref()).await?;
+                    tasks.shuffle(&mut thread_rng());
 
-                notify = Some(tasks.len());
-                context.user_data.update_tasks(chat_id, &tasks).await?;
-                context
-                    .user_data
-                    .take_next_task(chat_id)
-                    .await?
-                    .ok_or(BotErrors::NoTaskGenerated)?
-            }
+                    notify = Some(tasks.len());
+                    self.user_data.update_tasks(chat_id, &tasks).await?;
+                    self.user_data
+                        .take_next_task(chat_id)
+                        .await?
+                        .ok_or(BotErrors::NoTaskGenerated)?
+                }
+            };
+
+            self.tasks.get_task(task_id).await?.ok_or(BotErrors::NoTaskFound)?
         };
 
-        context.tasks.get_task(task_id).await?.ok_or(BotErrors::NoTaskFound)?
-    };
-
-    if let Some(generated_tasks) = notify {
-        bot.send_message(
+        if let Some(generated_tasks) = notify {
+            bot.send_message(
             chat_id,
             format!(
                 "У меня есть {generated_tasks} {tasks}{filter}, поехали\\!\n\n_Напоминаю, задачи сгенерированы автоматически и могут содержать ошибки\\. Хотя мы очень старались, чтобы это происходило пореже\\._",
@@ -69,32 +65,33 @@ pub async fn ask_next_task<T: TaskInfoService, U: UserStateService>(
         .parse_mode(ParseMode::MarkdownV2)
         .send()
         .await?;
-    }
+        }
 
-    let MessageData { message, buttons } = build_message(&task)?;
-    log::debug!(
-        "#{chat_id} asking: {}",
-        message[QUESTION_PRELUDE.len()..].trim().lines().next().unwrap_or_default()
-    );
+        let MessageData { message, buttons } = build_message(&task)?;
+        log::debug!(
+            "#{chat_id} asking: {}",
+            message[QUESTION_PRELUDE.len()..].trim().lines().next().unwrap_or_default()
+        );
 
-    let message_data = message.clone();
-    let result = bot
-        .send_message(chat_id, message)
-        .parse_mode(ParseMode::MarkdownV2)
-        .reply_markup(ReplyMarkup::inline_kb(
-            buttons
-                .into_iter()
-                .map(|button| vec![InlineKeyboardButton::callback(button.text, button.command)])
-                .collect::<Vec<_>>(),
-        ))
-        .send()
-        .await;
+        let message_data = message.clone();
+        let result = bot
+            .send_message(chat_id, message)
+            .parse_mode(ParseMode::MarkdownV2)
+            .reply_markup(ReplyMarkup::inline_kb(
+                buttons
+                    .into_iter()
+                    .map(|button| vec![InlineKeyboardButton::callback(button.text, button.command)])
+                    .collect::<Vec<_>>(),
+            ))
+            .send()
+            .await;
 
-    match result {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            log::error!("Error sending message {message_data}: {e}");
-            Err(e.into())
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                log::error!("Error sending message {message_data}: {e}");
+                Err(e.into())
+            }
         }
     }
 }
